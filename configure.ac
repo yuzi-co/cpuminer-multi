@@ -109,7 +109,7 @@ fi
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 
 # GC2 for GNU static
-if test "x$OS" = "xWindows_NT" ; then
+if test "x$have_win32" = "xtrue" ; then
    # MinGW
    AC_CHECK_LIB([pthread], [pthread_create], PTHREAD_LIBS="-lpthreadGC2",[])
 else
