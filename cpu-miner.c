@@ -1089,6 +1089,7 @@ static int share_result(int result, struct work *work, const char *reason)
 	case ALGO_CRYPTONIGHT:
 	case ALGO_PLUCK:
 	case ALGO_SCRYPTJANE:
+	case ALGO_YESCRYPT:
 		sprintf(s, hashrate >= 1e6 ? "%.0f" : "%.2f", hashrate);
 		applog(LOG_NOTICE, "accepted: %lu/%lu (%s), %s H/s %s",
 			accepted_count, accepted_count + rejected_count,
@@ -2489,7 +2490,7 @@ static void *miner_thread(void *userdata)
 			}
 			tm_rate_log = time(NULL);
 		}
-		if (opt_benchmark && thr_id == opt_n_threads - 1) {
+		if (thr_id == opt_n_threads - 1) {
 			double hashrate = 0.;
 			for (i = 0; i < opt_n_threads && thr_hashrates[i]; i++)
 				hashrate += thr_hashrates[i];
@@ -2500,6 +2501,7 @@ static void *miner_thread(void *userdata)
 				case ALGO_AXIOM:
 				case ALGO_BALLOON:
 				case ALGO_SCRYPTJANE:
+				case ALGO_YESCRYPT:
 					sprintf(s, "%.3f", hashrate);
 					applog(LOG_NOTICE, "Total: %s H/s", s);
 					break;
