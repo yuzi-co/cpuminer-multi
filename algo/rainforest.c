@@ -555,13 +555,13 @@ static inline uint32_t rf_rambox(rf256_ctx_t *ctx, uint64_t old) {
 }
 
 // write (_x_,_y_) at cell _cell_ for offset _ofs_
-static inline void rf_w128(uint64_t *cell, u_long ofs, uint64_t x, uint64_t y) {
+static inline void rf_w128(uint64_t *cell, uint64_t ofs, uint64_t x, uint64_t y) {
 #if defined(__ARM_ARCH_8A) || defined(__AARCH64EL__)
   // 128 bit at once is faster when exactly two parallelizable instructions are
   // used between two calls to keep the pipe full.
   asm volatile("stp %0, %1, [%2,#%3]\n\t"
                : /* no output */
-               : "r"(x), "r"(y), "r" (cell), "I" (ofs*8));
+               : "r"(x), "r"(y), "r" (cell), "l" (ofs*8));
 #else
   cell[ofs+0] = x;
   cell[ofs+1] = y;
