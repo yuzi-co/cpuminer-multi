@@ -815,11 +815,12 @@ static void rf256_final(void *out, rf256_ctx_t *ctx) {
 }
 
 // hash _len_ bytes from _in_ into _out_
-void rf256_hash(void *out, const void *in, size_t len) {
-  rf256_ctx_t ctx;
-  rf256_init(&ctx);
-  rf256_update(&ctx, in, len);
-  rf256_final(out, &ctx);
+void rf256_hash(void *out, const void *in, size_t len)
+{
+	rf256_ctx_t ctx;
+	rf256_init(&ctx);
+	rf256_update(&ctx, in, len);
+	rf256_final(out, &ctx);
 }
 
 int scanhash_rf256(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
