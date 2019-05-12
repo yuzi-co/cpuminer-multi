@@ -79,7 +79,6 @@ Algorithms
  * ? keccak (Maxcoin  HelixCoin, CryptoMeth, Galleon, 365coin, Slothcoin, BitcointalkCoin)
  * ? keccakc (Creativecoin)
  * ? luffa (Joincoin, Doomcoin)
- * ? rainforest
  * ? shavite3 (INKcoin)
 
 #### Planned support for
