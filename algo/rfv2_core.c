@@ -82,7 +82,7 @@ typedef struct RF_ALIGN(16) rfv2_ctx {
 	uint32_t word;  // LE pending message
 	uint32_t len;   // total message length
 	uint32_t crc;
-	uint16_t changes; // must remain lower than RFV2_RAMBOX_HIST
+	uint16_t changes; // must remain lower than RFV2_RAMBOX_HIST, 65535=R/O
 	uint16_t left_bits; // adjust rambox probability
 	uint64_t *rambox;
 	uint32_t rb_o;    // rambox offset
@@ -149,6 +149,12 @@ static const uint8_t rfv2_iv[32] = {
 	0x78,0xe9,0x90,0xd3,0xb3,0xc8,0x9b,0x7b,0x0a,0xc4,0x86,0x6e,0x4e,0x38,0xb3,0x6b,
 	0x33,0x68,0x7c,0xed,0x73,0x35,0x4b,0x0a,0x97,0x25,0x4c,0x77,0x7a,0xaa,0x61,0x1b
 };
+
+/* le32 memory to host representation */
+static inline uint32_t rf_le32toh(uint8_t *x)
+{
+	return x[0] + (x[1] << 8) + (x[2] << 16) + (x[3] << 24);
+}
 
 // mix the current state with the crc and return the new crc
 static inline uint32_t rf_crc32x4(rf_u32 *state, uint32_t crc)
@@ -312,11 +318,13 @@ static inline uint64_t rfv2_rambox(rfv2_ctx_t *ctx, uint64_t old)
 		p = &ctx->rambox[idx];
 		k = *p;
 		old += rf_rotr64(k, (uint8_t)(old / ctx->rb_l));
-		*p = old;
-		if (ctx->changes < RFV2_RAMBOX_HIST) {
-			ctx->hist[ctx->changes] = idx;
-			ctx->prev[ctx->changes] = k;
-			ctx->changes++;
+		if (ctx->changes != 65535) {
+			*p = old;
+			if (ctx->changes < RFV2_RAMBOX_HIST) {
+				ctx->hist[ctx->changes] = idx;
+				ctx->prev[ctx->changes] = k;
+				ctx->changes++;
+			}
 		}
 	}
 	return old;
@@ -656,15 +664,15 @@ static inline void rfv2_update(rfv2_ctx_t *ctx, const void *msg, size_t len)
 	}
 }
 
-// pad to the next 256-bit (32 bytes) boundary
-static inline void rfv2_pad256(rfv2_ctx_t *ctx)
+// pad to the next 128-bit (16 bytes) boundary
+static inline void rfv2_pad128(rfv2_ctx_t *ctx)
 {
-	const uint8_t pad256[32] = { 0, };
+	const uint8_t pad128[16] = { 0, };
 	uint32_t pad;
 
-	pad = (32 - ctx->len) & 0xF;
+	pad = (16 - ctx->len) & 0xF;
 	if (pad)
-		rfv2_update(ctx, pad256, pad);
+		rfv2_update(ctx, pad128, pad);
 }
 
 // finalize the hash and copy the result into _out_ if not null (256 bits)
@@ -741,7 +749,7 @@ int rfv2_hash2(void *out, const void *in, size_t len, void *rambox, const void *
 	for (loop = 0; loop < loops; loop++) {
 		rfv2_update(&ctx, in, len);
 		// pad to the next 256 bit boundary
-		rfv2_pad256(&ctx);
+		rfv2_pad128(&ctx);
 	}
 
 	rfv2_final(out, &ctx);
@@ -768,4 +776,72 @@ int rfv2_hash2(void *out, const void *in, size_t len, void *rambox, const void *
 int rfv2_hash(void *out, const void *in, size_t len, void *rambox, const void *rambox_template)
 {
 	return rfv2_hash2(out, in, len, rambox, rambox_template, RFV2_INIT_CRC);
+}
+
+/* scans nonces from <min> to <max> applying them to message <msg> and stopping
+ * once a hash gives a result at least as good as <target>. It uses <rambox>,
+ * which must have been pre-initialized, and leaves the resulting hash in
+ * <hash> which must contain at least 32 bytes and be 32-bit aligned. On
+ * success it returns the number of hashes attempted, or returns the opposite
+ * of this number if no solution is found. This will not overflow since we only
+ * cover few hashes. It only works with 32-bit
+ * aligned 80-byte block headers in big endian format and places the nonce in
+ * big endian format at the end of the message to hash it. In case of success,
+ * the caller has to extract the nonce from the message. It also stops if
+ * <stop> is non-NULL and the location it points to contains a non-null value
+ * (used to interrupt scanning by another thread).
+ */
+int rfv2_scan_hdr(char *msg, void *rambox, uint32_t *hash, uint32_t target, uint32_t min, uint32_t max, volatile char *stop)
+{
+	uint32_t msgh, msgh_init, nonce, hashes;
+	rfv2_ctx_t ctx;
+
+	// pre-compute the hash state based on the constant part of the header
+	msgh_init = rf_crc32_mem(0, msg, 76);
+
+	hashes = 0;
+	for (nonce = min;; nonce++) {
+		msg[76] = nonce >> 24;
+		msg[77] = nonce >> 16;
+		msg[78] = nonce >> 8;
+		msg[79] = nonce;
+
+		msgh = rf_crc32_mem(msgh_init, msg + 76, 4);
+		if (sin_scaled(msgh) != 2)
+			goto next;
+
+		rfv2_init(&ctx, RFV2_INIT_CRC, rambox);
+		ctx.changes = 65535; // mark the rambox read-only
+
+		ctx.rb_o = msgh % (ctx.rb_l / 2);
+		ctx.rb_l = (ctx.rb_l / 2 - ctx.rb_o) * 2;
+
+		/* first loop */
+		rfv2_update(&ctx, msg, 80);
+		rfv2_pad128(&ctx);
+
+		/* second loop */
+		rfv2_update(&ctx, msg, 80);
+		rfv2_pad128(&ctx);
+
+		/* final */
+		rfv2_final(hash, &ctx);
+		hashes++;
+
+		if (__builtin_expect(rf_le32toh((uint8_t *)(hash + 7)) <= target, 0)) {
+			/* make sure it's a valid hash as the read-only rambox
+			 * occasionally causes invalid ones : just recompute it
+			 * entirely.
+			 */
+			rfv2_hash2(hash, msg, 80, rambox, NULL, RFV2_INIT_CRC);
+			if (rf_le32toh((uint8_t *)(hash+7)) <= target)
+				return hashes;
+		}
+	next:
+		if (nonce == max)
+			return -hashes;
+
+		if (stop && *stop)
+			return -hashes;
+	}
 }

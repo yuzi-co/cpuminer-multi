@@ -2167,6 +2167,9 @@ static void *miner_thread(void *userdata)
 
 		max64 *= (int64_t) thr_hashrates[thr_id];
 
+		if (opt_algo == ALGO_RFV2)
+			max64 *= 256; // optimized scan skips 255/256 nonces
+
 		if (max64 <= 0) {
 			switch (opt_algo) {
 			case ALGO_SCRYPT:
