@@ -15,6 +15,7 @@
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
+#include "compat/portable_endian.h"
 #else
 #include <unistd.h>
 #endif
