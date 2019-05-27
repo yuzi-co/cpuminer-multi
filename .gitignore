@@ -32,6 +32,8 @@ mingw32-config.cache
 
 *.iml
 
+.vscode
+
 *.vcxproj.user
 *.opensdf
 *.sdf
