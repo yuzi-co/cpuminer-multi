@@ -51,6 +51,7 @@ Algorithms
  * ✓ __pluck__ (Supcoin [SUP])
  * ✓ __quark__ (Quarkcoin)
  * ✓ __qubit__ (GeoCoin)
+ * ✓ __rfv2__ (MicroBitcoin [MBC])
  * ✓ __skein__ (Skeincoin, Myriadcoin, Xedoscoin, ...)
  * ✓ __skein2__ (Woodcoin)
  * ✓ __s3__ (OneCoin)
@@ -79,7 +80,6 @@ Algorithms
  * ? keccak (Maxcoin  HelixCoin, CryptoMeth, Galleon, 365coin, Slothcoin, BitcointalkCoin)
  * ? keccakc (Creativecoin)
  * ? luffa (Joincoin, Doomcoin)
- * ? rainforest
  * ? shavite3 (INKcoin)
 
 #### Planned support for
